@@ -373,9 +373,100 @@ int main(){
         };
     }
 
-    SECTION("element-wise operations"){
-        TEST("operator+"){
-            test::fail();
+    SECTION("foreach"){
+        TEST("addition - 2 tensors"){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+            Tensor<2,int>::foreach<2>({arr,arr2}, [](int*(&vals)[2])->void{
+                *vals[0]+=*vals[1];
+            });
+            test::equal(arr[{0,0}],6);
+            test::equal(arr[{0,1}],8);
+            test::equal(arr[{1,0}],10);
+            test::equal(arr[{1,1}],12);
+        };
+    }
+
+    SECTION("operator +="){
+        TEST("operator+="){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+            arr+=arr2;
+            test::equal(arr[{0,0}],6);
+            test::equal(arr[{0,1}],8);
+            test::equal(arr[{1,0}],10);
+            test::equal(arr[{1,1}],12);
+        };
+        TEST("chaining +="){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+            (arr+=arr2)+=arr;
+            test::equal(arr[{0,0}],12);
+            test::equal(arr[{0,1}],16);
+            test::equal(arr[{1,0}],20);
+            test::equal(arr[{1,1}],24);
+        };
+        TEST("broadcasting"){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<1, int> arr2{{2}};
+            arr2[{0}]=5;
+            arr2[{1}]=6;
+            arr+=arr2;
+            test::equal(arr[{0,0}],6);
+            test::equal(arr[{0,1}],8);
+            test::equal(arr[{1,0}],8);
+            test::equal(arr[{1,1}],10);
+        };
+        TEST("broadcasting 2"){
+            Tensor<3, int> arr{{2,2,2}};
+            arr[{0,0,0}]=1;
+            arr[{0,0,1}]=2;
+            arr[{0,1,0}]=3;
+            arr[{0,1,1}]=4; 
+            arr[{1,0,0}]=5;
+            arr[{1,0,1}]=6;
+            arr[{1,1,0}]=7;
+            arr[{1,1,1}]=8;
+            Tensor<1, int> arr2{{2}};
+            arr2[{0}]=5;
+            arr2[{1}]=6;
+            arr+=arr2;
+            test::equal(arr[{0,0,0}],6);
+            test::equal(arr[{0,0,1}],8);
+            test::equal(arr[{0,1,0}],8);
+            test::equal(arr[{0,1,1}],10);
+            test::equal(arr[{1,0,0}],10);
+            test::equal(arr[{1,0,1}],12);
+            test::equal(arr[{1,1,0}],12);
+            test::equal(arr[{1,1,1}],14);
         };
     }
 
