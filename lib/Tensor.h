@@ -2,6 +2,8 @@
 #include <array>
 #include "References.h"
 
+#pragma once
+
 #ifdef TESTING
 #define PRIVATE public
 #define PROTECTED public
@@ -25,6 +27,7 @@ public:
     // initializes a Tensor with set dimensions
     Tensor(const std::size_t (&list)[DIMENSION_COUNT]);
 
+	// empty constructor, initializes all dimensions with size 1
     Tensor();
 
     // copy constructor
@@ -38,6 +41,11 @@ public:
     
     template<int O_DIM>
     Tensor& operator+=(Tensor<O_DIM, T> t);
+
+    Tensor& operator-=(Tensor t);
+    
+    template<int O_DIM>
+    Tensor& operator-=(Tensor<O_DIM, T> t);
 
     class iterator{
     PRIVATE:
@@ -78,47 +86,38 @@ public:
     // acquires a slice of the tensor along a dimension
     Tensor<DIMENSION_COUNT-1, T> slice(std::size_t x, std::size_t dim=0);
 
+	// expands the tensor by 1 axis, uses the same memory, inserts the axis into dim
+	Tensor<DIMENSION_COUNT+1, T> expand(std::size_t dim=0){
+		Tensor<DIMENSION_COUNT+1, T> expTensor{};
+		expTensor.values=values;
+		std::size_t extra=0;
+		for(std::size_t i = 0; i < DIMENSION_COUNT; i++){
+			if(i==dim){
+				expTensor.dimensionIncrementors[i]=1;
+				expTensor.dimensions[i]=1;
+				extra=1;
+			}
+			expTensor.dimensionIncrementors[i + extra] = dimensionIncrementors[i];
+			expTensor.dimensions[i + extra] = dimensions[i];
+		}
+		return expTensor;
+	}
+
     // swaps 2 axes dim1 and dim2, returns new tensor with swapped dimensions but shared memory
     Tensor swapaxes(const std::size_t dim1, const std::size_t dim2);
 
-    //creates a seperate memory tensor and copies over all items
+    // creates a seperate memory tensor and copies over all items
     Tensor clone();
 
+	// Runs supplied function element-wise for every element
     template<int T_COUNT>
     static void foreach( std::array<Tensor, T_COUNT> tensors, //Tensor* (tensors)[T_COUNT], /*std::initializer_list<Tensor<DIMENSION_COUNT, T>>,*/
-		void(*func)(T*(&values)[T_COUNT])){
-			Tensor ts[T_COUNT];
-			//auto iter=tens.begin();
-			for(int i=0;i<T_COUNT;i++){
-				ts[i]=tensors[i];
-				//iter++;
-			}
-			static_assert(T_COUNT>0, "Tensor count has to be greater than 0");
-			//check if all sizes match
-			for(std::size_t x=0;x<DIMENSION_COUNT;x++){
-				std::size_t zeroSize=ts[0].dimensions[x];
-				for(std::size_t t=0;t<T_COUNT;t++){
-					if(zeroSize!=ts[t].dimensions[x])throw std::invalid_argument("Dimensions don't match");
-				}
-			}
-			T* vals[T_COUNT];
-			Tensor::iterator its[T_COUNT];
-			for(int i=0;i<T_COUNT;i++){
-				its[i]=ts[i].begin();
-			}
-			while(its[0]!=ts[0].end()){
-				for(int i=0;i<T_COUNT;i++){
-					vals[i]=&*its[i];
-					
-				}
-				func(vals);
-				for(int i=0;i<T_COUNT;i++){
-					its[i]++;
-				}
-			}
-		};
+		void(*func)(T*(&values)[T_COUNT]));
 
 };
+
+
+
 
 // ------------------------------------------Constructors----------------------------------------
 
@@ -146,13 +145,19 @@ Tensor<DIMENSION_COUNT, T>::Tensor(const std::size_t (&list)[DIMENSION_COUNT])
 template <int DIMENSION_COUNT, typename T>
 Tensor<DIMENSION_COUNT, T>::Tensor(){
     static_assert(DIMENSION_COUNT!=0, "Only Non-zero dimensional tensors are supported at this time.");
+	for (std::size_t i = 0; i < DIMENSION_COUNT; i++) {
+        dimensions[i] = 1;
+        dimensionIncrementors[i] = 1;
+    }
+	offset = 0;
+	values = Reference<T>(1);
 }
 
 template <int DIMENSION_COUNT, typename T>
 Tensor<DIMENSION_COUNT, T>::Tensor(Tensor& t)
 {
     static_assert(DIMENSION_COUNT!=0, "Only Non-zero dimensional tensors are supported at this time.");
-    for (std::size_t i = 0; i < DIMENSION_COUNT; i++) {
+	for (std::size_t i = 0; i < DIMENSION_COUNT; i++) {
         dimensions[i] = t.dimensions[i];
         dimensionIncrementors[i] = t.dimensionIncrementors[i];
     }
@@ -220,6 +225,41 @@ Tensor<DIMENSION_COUNT, T>& Tensor<DIMENSION_COUNT, T>::operator+=(Tensor<O_DIM,
 
     for(std::size_t i=0;i<dimensions[0];i++){
         this->slice(i)+=t;
+    }
+    
+    
+    return *this;
+}
+
+template <int DIMENSION_COUNT, typename T>
+Tensor<DIMENSION_COUNT, T>& Tensor<DIMENSION_COUNT, T>::operator-=(Tensor t){
+
+    //check dimensions
+    for(int i=0;i<DIMENSION_COUNT;i++){
+        if(dimensions[i]!=t.dimensions[i])throw std::invalid_argument("Tensor dimensions don't match");
+    }
+    
+    auto tIter=t.begin();
+    for(T& x:*this){
+        x-=*tIter;
+        tIter++;
+    }
+
+    return *this;
+} 
+
+template <int DIMENSION_COUNT, typename T>
+template <int O_DIM>
+Tensor<DIMENSION_COUNT, T>& Tensor<DIMENSION_COUNT, T>::operator-=(Tensor<O_DIM, T> t)
+{
+
+    //check dimensions
+    static_assert(DIMENSION_COUNT>O_DIM, "Dimension counts unfit for broadcasting");
+    
+    const int DIM_DIFF = DIMENSION_COUNT - O_DIM;
+
+    for(std::size_t i=0;i<dimensions[0];i++){
+        this->slice(i)-=t;
     }
     
     
@@ -303,7 +343,40 @@ Tensor<DIMENSION_COUNT, T> Tensor<DIMENSION_COUNT, T>::clone()
     return cpy;
 }
 
-
+template <int DIMENSION_COUNT, typename T>
+template <int T_COUNT>
+void Tensor<DIMENSION_COUNT, T>::foreach( std::array<Tensor<DIMENSION_COUNT, T>, T_COUNT> tensors, //Tensor* (tensors)[T_COUNT], /*std::initializer_list<Tensor<DIMENSION_COUNT, T>>,*/
+		void(*func)(T*(&values)[T_COUNT])){
+			Tensor ts[T_COUNT];
+			//auto iter=tens.begin();
+			for(int i=0;i<T_COUNT;i++){
+				ts[i]=tensors[i];
+				//iter++;
+			}
+			static_assert(T_COUNT > 0, "Tensor count has to be greater than 0");
+			//check if all sizes match
+			for(std::size_t x=0;x<DIMENSION_COUNT;x++){
+				std::size_t zeroSize=ts[0].dimensions[x];
+				for(std::size_t t=0;t<T_COUNT;t++){
+					if(zeroSize!=ts[t].dimensions[x])throw std::invalid_argument("Dimensions don't match");
+				}
+			}
+			T* vals[T_COUNT];
+			Tensor::iterator its[T_COUNT];
+			for(int i=0;i<T_COUNT;i++){
+				its[i]=ts[i].begin();
+			}
+			while(its[0]!=ts[0].end()){
+				for(int i=0;i<T_COUNT;i++){
+					vals[i]=&*its[i];
+					
+				}
+				func(vals);
+				for(int i=0;i<T_COUNT;i++){
+					its[i]++;
+				}
+			}
+		};
 
 // --------------------------Tensor iterator-----------------------------------
 // ----------------------------------------------------------------------------

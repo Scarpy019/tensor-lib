@@ -4,7 +4,7 @@
 //define that disables access protection for unit-testing private/protected variables
 #define TESTING
 #include "./lib/Tensor.h"
-
+#include "./lib/Matmul.h"
 
 int main(){
     SECTION("Reference counting"){
@@ -386,13 +386,43 @@ int main(){
             arr2[{1,0}]=7;
             arr2[{1,1}]=8;
             Tensor<2,int>::foreach<2>({arr,arr2}, [](int*(&vals)[2])->void{
-                *vals[0]+=*vals[1];
+                (*vals[0])+=(*vals[1]);
             });
             test::equal(arr[{0,0}],6);
             test::equal(arr[{0,1}],8);
             test::equal(arr[{1,0}],10);
             test::equal(arr[{1,1}],12);
         };
+
+		TEST("complex - 4 tensors"){
+			Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+			Tensor<2, int> arr3{{2,2}};
+            arr3[{0,0}]=2;
+            arr3[{0,1}]=2;
+            arr3[{1,0}]=2;
+            arr3[{1,1}]=2;
+			Tensor<2, int> arr4{{2,2}};
+            arr4[{0,0}]=4;
+            arr4[{0,1}]=4;
+            arr4[{1,0}]=3;
+            arr4[{1,1}]=2;
+            Tensor<2,int>::foreach<4>({arr,arr2, arr3, arr4}, [](int*(&vals)[4])->void{
+                (*vals[0]) += (*vals[1]) * (*vals[2]) + (*vals[3]);
+            });
+            test::equal(arr[{0,0}],15);
+            test::equal(arr[{0,1}],18);
+            test::equal(arr[{1,0}],20);
+            test::equal(arr[{1,1}],22);
+		};
     }
 
     SECTION("operator +="){
@@ -470,6 +500,277 @@ int main(){
         };
     }
 
+	SECTION("operator -="){
+        TEST("operator-="){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+            arr-=arr2;
+            test::equal(arr[{0,0}],-4);
+            test::equal(arr[{0,1}],-4);
+            test::equal(arr[{1,0}],-4);
+            test::equal(arr[{1,1}],-4);
+        };
+        TEST("chaining -="){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<2, int> arr2{{2,2}};
+            arr2[{0,0}]=5;
+            arr2[{0,1}]=6;
+            arr2[{1,0}]=7;
+            arr2[{1,1}]=8;
+            (arr-=arr2)-=arr;
+            test::equal(arr[{0,0}],0);
+            test::equal(arr[{0,1}],0);
+            test::equal(arr[{1,0}],0);
+            test::equal(arr[{1,1}],0);
+        };
+        TEST("broadcasting"){
+            Tensor<2, int> arr{{2,2}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+            Tensor<1, int> arr2{{2}};
+            arr2[{0}]=5;
+            arr2[{1}]=6;
+            arr-=arr2;
+            test::equal(arr[{0,0}],-4);
+            test::equal(arr[{0,1}],-4);
+            test::equal(arr[{1,0}],-2);
+            test::equal(arr[{1,1}],-2);
+        };
+        TEST("broadcasting 2"){
+            Tensor<3, int> arr{{2,2,2}};
+            arr[{0,0,0}]=1;
+            arr[{0,0,1}]=2;
+            arr[{0,1,0}]=3;
+            arr[{0,1,1}]=4; 
+            arr[{1,0,0}]=5;
+            arr[{1,0,1}]=6;
+            arr[{1,1,0}]=7;
+            arr[{1,1,1}]=8;
+            Tensor<1, int> arr2{{2}};
+            arr2[{0}]=5;
+            arr2[{1}]=6;
+            arr-=arr2;
+            test::equal(arr[{0,0,0}],-4);
+            test::equal(arr[{0,0,1}],-4);
+            test::equal(arr[{0,1,0}],-2);
+            test::equal(arr[{0,1,1}],-2);
+            test::equal(arr[{1,0,0}],0);
+            test::equal(arr[{1,0,1}],0);
+            test::equal(arr[{1,1,0}],2);
+            test::equal(arr[{1,1,1}],2);
+        };
+    }
+	
+	SECTION("Expand"){
+		TEST("expansion 1"){
+			Tensor<2, int> arr{{2,3}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+			arr[{0,2}]=5;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+			arr[{1,2}]=6;
+			Tensor arr2 = arr.expand();
+			test::equal(arr2.dimensions[0], 1);
+			test::equal(arr2.dimensions[1], 2);
+			test::equal(arr2.dimensions[2], 3);
+			test::equal(arr2.dimensionIncrementors[0], 1);
+			test::equal(arr2.dimensionIncrementors[1], arr.dimensionIncrementors[0]);
+			test::equal(arr2.dimensionIncrementors[2], arr.dimensionIncrementors[1]);
+		};
+		TEST("expansion 2"){
+			Tensor<2, int> arr{{2,3}};
+            arr[{0,0}]=1;
+            arr[{0,1}]=2;
+			arr[{0,2}]=5;
+            arr[{1,0}]=3;
+            arr[{1,1}]=4;
+			arr[{1,2}]=6;
+			Tensor arr2 = arr.expand(1);
+			test::equal(arr2.dimensions[0], 2);
+			test::equal(arr2.dimensions[1], 1);
+			test::equal(arr2.dimensions[2], 3);
+			test::equal(arr2.dimensionIncrementors[0], arr.dimensionIncrementors[0]);
+			test::equal(arr2.dimensionIncrementors[1], 1);
+			test::equal(arr2.dimensionIncrementors[2], arr.dimensionIncrementors[1]);
+		};
+		TEST("expansion 3"){
+			Tensor<1, int> arr{{2}};
+            arr[{0}]=1;
+            arr[{1}]=2;
+			Tensor arr2 = arr.expand();
+			test::equal(arr2.dimensions[1], 2);
+			test::equal(arr2.dimensions[0], 1);
+			test::equal(arr2.dimensionIncrementors[1], arr.dimensionIncrementors[0]);
+			test::equal(arr2.dimensionIncrementors[0], 1);
+		};
+	}
+	
+	SECTION("Matmul out variant"){
+		TEST("regular matmul"){
+			Tensor<2, int> x1{{2,2}};
+			x1[{0,0}] = 4;
+			x1[{0,1}] = 1;
+			x1[{1,0}] = -6;
+			x1[{1,1}] = 8;
+			Tensor<2, int> x2{{2,2}};
+			x2[{0,0}] = 4;
+			x2[{0,1}] = -18;
+			x2[{1,0}] = 2;
+			x2[{1,1}] = -3;
+			Tensor<2, int> x3{{2,2}};
+			matmul(x1,x2,x3);
+			Tensor<2, int> expected{{2,2}};
+			expected[{0,0}] = 18;
+			expected[{0,1}] = -75;
+			expected[{1,0}] = -8;
+			expected[{1,1}] = 84;
+			test::equal(x3[{0,0}], expected[{0,0}]);
+			test::equal(x3[{0,1}], expected[{0,1}]);
+			test::equal(x3[{1,0}], expected[{1,0}]);
+			test::equal(x3[{1,1}], expected[{1,1}]);
+		};
+		TEST("broadcast to x2"){
+			Tensor<2, int> x1{{2,2}};
+			x1[{0,0}] = 4;
+			x1[{0,1}] = 1;
+			x1[{1,0}] = -6;
+			x1[{1,1}] = 8;
+			Tensor<3, int> x2{{2,2,2}};
+			x2[{0,0,0}] = 4;
+			x2[{0,0,1}] = -18;
+			x2[{0,1,0}] = 2;
+			x2[{0,1,1}] = -3;
+			x2[{1,0,0}] = 9;
+			x2[{1,0,1}] = -1;
+			x2[{1,1,0}] = -92;
+			x2[{1,1,1}] = 3;
+			Tensor<3, int> x3{{2,2,2}};
+			matmul(x1,x2,x3);
+			Tensor<3, int> expected{{2,2,2}};
+			expected[{0,0,0}] = 18;
+			expected[{0,0,1}] = -75;
+			expected[{0,1,0}] = -8;
+			expected[{0,1,1}] = 84;
+			test::equal(x3[{0,0,0}], expected[{0,0,0}]);
+			test::equal(x3[{0,0,1}], expected[{0,0,1}]);
+			test::equal(x3[{0,1,0}], expected[{0,1,0}]);
+			test::equal(x3[{0,1,1}], expected[{0,1,1}]);
+			expected[{1,0,0}] = -56;
+			expected[{1,0,1}] = -1;
+			expected[{1,1,0}] = -790;
+			expected[{1,1,1}] = 30;
+			test::equal(x3[{1,0,0}], expected[{1,0,0}]);
+			test::equal(x3[{1,0,1}], expected[{1,0,1}]);
+			test::equal(x3[{1,1,0}], expected[{1,1,0}]);
+			test::equal(x3[{1,1,1}], expected[{1,1,1}]);
+		};
+		TEST("broadcast to x1"){
+			Tensor<2, int> x1{{2,2}};
+			x1[{0,0}] = 4;
+			x1[{0,1}] = 1;
+			x1[{1,0}] = -6;
+			x1[{1,1}] = 8;
+			Tensor<3, int> x2{{2,2,2}};
+			x2[{0,0,0}] = 4;
+			x2[{0,0,1}] = -18;
+			x2[{0,1,0}] = 2;
+			x2[{0,1,1}] = -3;
+			x2[{1,0,0}] = 9;
+			x2[{1,0,1}] = -1;
+			x2[{1,1,0}] = -92;
+			x2[{1,1,1}] = 3;
+			Tensor<3, int> x3{{2,2,2}};
+			matmul(x2,x1,x3);
+			Tensor<3, int> expected{{2,2,2}};
+			expected[{0,0,0}] = 124;
+			expected[{0,0,1}] = -140;
+			expected[{0,1,0}] = 26;
+			expected[{0,1,1}] = -22;
+			test::equal(x3[{0,0,0}], expected[{0,0,0}]);
+			test::equal(x3[{0,0,1}], expected[{0,0,1}]);
+			test::equal(x3[{0,1,0}], expected[{0,1,0}]);
+			test::equal(x3[{0,1,1}], expected[{0,1,1}]);
+			expected[{1,0,0}] = 42;
+			expected[{1,0,1}] = 1;
+			expected[{1,1,0}] = -386;
+			expected[{1,1,1}] = -68;
+			test::equal(x3[{1,0,0}], expected[{1,0,0}]);
+			test::equal(x3[{1,0,1}], expected[{1,0,1}]);
+			test::equal(x3[{1,1,0}], expected[{1,1,0}]);
+			test::equal(x3[{1,1,1}], expected[{1,1,1}]);
+		};
+		TEST("3-dimensional matmul"){
+			Tensor<3, int> x1{{2,2,2}};
+			x1[{0,0,0}] = 4;
+			x1[{0,0,1}] = 1;
+			x1[{0,1,0}] = -6;
+			x1[{0,1,1}] = 8;
+			x1[{1,0,0}] = 9;
+			x1[{1,0,1}] = -1;
+			x1[{1,1,0}] = -92;
+			x1[{1,1,1}] = 3;
+			Tensor<3, int> x2{{2,2,2}};
+			x2[{0,0,0}] = 4;
+			x2[{0,0,1}] = -18;
+			x2[{0,1,0}] = 2;
+			x2[{0,1,1}] = -3;
+			x2[{1,0,0}] = 9;
+			x2[{1,0,1}] = -1;
+			x2[{1,1,0}] = -92;
+			x2[{1,1,1}] = 3;
+			Tensor<3, int> x3{{2,2,2}};
+			matmul(x1,x2,x3);
+			Tensor<3, int> expected{{2,2,2}};
+			expected[{0,0,0}] = 18;
+			expected[{0,0,1}] = -75;
+			expected[{0,1,0}] = -8;
+			expected[{0,1,1}] = 84;
+			test::equal(x3[{0,0,0}], expected[{0,0,0}]);
+			test::equal(x3[{0,0,1}], expected[{0,0,1}]);
+			test::equal(x3[{0,1,0}], expected[{0,1,0}]);
+			test::equal(x3[{0,1,1}], expected[{0,1,1}]);
+			expected[{1,0,0}] = 173;
+			expected[{1,0,1}] = -12;
+			expected[{1,1,0}] = -1104;
+			expected[{1,1,1}] = 101;
+			test::equal(x3[{1,0,0}], expected[{1,0,0}]);
+			test::equal(x3[{1,0,1}], expected[{1,0,1}]);
+			test::equal(x3[{1,1,0}], expected[{1,1,0}]);
+			test::equal(x3[{1,1,1}], expected[{1,1,1}]);
+		};
+		TEST("2x2 @ 2"){
+			Tensor<2, int> x1{{2,2}};
+			x1[{0,0}] = 4;
+			x1[{0,1}] = 1;
+			x1[{1,0}] = -6;
+			x1[{1,1}] = 8;
+			Tensor<2, int> x2{{2,1}};
+			x2[{0,0}] = 4;
+			x2[{1,0}] = -18;
+			Tensor<2, int> x3{{2,1}};
+			matmul(x1,x2,x3);
+			Tensor<2, int> expected{{2,1}};
+			expected[{0,0}] = -2;
+			expected[{1,0}] = -168;
+			test::equal(x3[{0}], expected[{0}]);
+			test::equal(x3[{1}], expected[{1}]);
+		};
+	}
     test::start();
 }
 
